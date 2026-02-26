@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import os
 
 st.set_page_config(page_title="Student Service Hour Tracker", layout="centered")
 
@@ -14,44 +13,48 @@ st.markdown("""
 st.title("🎓 Student Service Hour Tracker")
 st.write("Enter your name below to see your service hour progress.")
 
-# --- Load & Process Data ---
-data_path = "Service Hours.xlsx"
+# --- Load Live Data from Google Sheet ---
+SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSW8n1nHKhUpvA1jcDBswmKuHQ_QkRXrZHq7Enbjb1TtzAifFX_GDQXgy3o45oBzXJhPydfU8NAKopd/pub?gid=1548414781&single=true&output=csv"
 
-if not os.path.exists(data_path):
-    st.error(f"Could not find `{data_path}`. Make sure it is in the same folder as app.py in your GitHub repo.")
+@st.cache_data(ttl=300)  # Refresh data every 5 minutes
+def load_data():
+    df = pd.read_csv(SHEET_URL)
+    df.columns = df.columns.str.strip()
+
+    slots = [
+        ("Name of student",   "Number of hours",   "Select student grade level", "Description of service",   "Date of service"),
+        ("Name of student 2", "Number of hours 2",  "Select student grade level", "Description of service 2", "Date of service"),
+        ("Name of student 3", "Number of hours 3",  "Select student grade level", "Description of service 3", "Date of service"),
+        ("Name of student 4", "Number of hours 4",  "Select student grade level", "Description of service 4", "Date of service"),
+    ]
+
+    records = []
+    for name_col, hours_col, grade_col, desc_col, date_col in slots:
+        subset = df[[name_col, hours_col, grade_col, desc_col, date_col]].copy()
+        subset.columns = ["Name", "Hours", "Grade", "Description", "Date"]
+        records.append(subset)
+
+    combined = pd.concat(records)
+    combined = combined.dropna(subset=["Name"])
+    combined["Hours"]       = pd.to_numeric(combined["Hours"], errors="coerce").fillna(0)
+    combined["Name"]        = combined["Name"].str.strip().str.title()
+    combined["Description"] = combined["Description"].fillna("No description provided")
+    combined["Date"]        = pd.to_datetime(combined["Date"], errors="coerce")
+
+    summary = combined.groupby("Name").agg(
+        Completed_Hours=("Hours", "sum"),
+        Grade=("Grade", "first")
+    ).reset_index()
+
+    return combined, summary
+
+try:
+    combined, summary = load_data()
+except Exception as e:
+    st.error(f"Could not load data from Google Sheets. Make sure the sheet is published to the web.\n\n{e}")
     st.stop()
 
-df = pd.read_excel(data_path)
-df.columns = df.columns.str.strip()
-
-# Combine the 4 student slots into one unified list
-slots = [
-    ("Name of student",   "Number of hours",   "Select student grade level", "Description of service",   "Date of service"),
-    ("Name of student 2", "Number of hours 2",  "Select student grade level", "Description of service 2", "Date of service"),
-    ("Name of student 3", "Number of hours 3",  "Select student grade level", "Description of service 3", "Date of service"),
-    ("Name of student 4", "Number of hours 4",  "Select student grade level", "Description of service 4", "Date of service"),
-]
-
-records = []
-for name_col, hours_col, grade_col, desc_col, date_col in slots:
-    subset = df[[name_col, hours_col, grade_col, desc_col, date_col]].copy()
-    subset.columns = ["Name", "Hours", "Grade", "Description", "Date"]
-    records.append(subset)
-
-combined = pd.concat(records)
-combined = combined.dropna(subset=["Name"])
-combined["Hours"]       = pd.to_numeric(combined["Hours"], errors="coerce").fillna(0)
-combined["Name"]        = combined["Name"].str.strip().str.title()
-combined["Description"] = combined["Description"].fillna("No description provided")
-combined["Date"]        = pd.to_datetime(combined["Date"], errors="coerce")
-
-# Summarize by student
-summary = combined.groupby("Name").agg(
-    Completed_Hours=("Hours", "sum"),
-    Grade=("Grade", "first")
-).reset_index()
-
-# Requirements by grade
+# --- Requirements by grade ---
 def get_requirements(grade):
     grade = str(grade).strip().lower().replace("th","").replace("st","").replace("nd","").replace("rd","")
     if grade in ["9", "10"]:
@@ -71,15 +74,14 @@ if search_query:
         st.warning("No student found with that name. Double-check your spelling.")
     else:
         for _, row in results.iterrows():
-            completed = row["Completed_Hours"]
-            grade     = row["Grade"]
+            completed    = row["Completed_Hours"]
+            grade        = row["Grade"]
             student_name = row["Name"]
             req_min, req_dist = get_requirements(grade)
 
             hours_needed_min  = max(0, req_min - completed)
             hours_needed_dist = max(0, req_dist - completed)
 
-            # Status
             if completed >= req_dist:
                 status_label = "🏆 Distinction"
                 status_color = "#2e7d32"
@@ -124,7 +126,6 @@ if search_query:
                 st.success("You have earned Distinction! Congratulations! 🎉")
 
             # --- Service Log ---
-            # Match using lowercase to avoid any casing mismatches
             student_log = combined[combined["Name"].str.lower() == student_name.lower()].copy()
             student_log = student_log.sort_values("Date", ascending=False)
 
