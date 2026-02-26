@@ -15,7 +15,7 @@ st.title("🎓 Student Service Hour Tracker")
 st.write("Enter your name below to see your service hour progress.")
 
 # --- Load & Process Data ---
-data_path = "Service_Hours.xlsx"
+data_path = "Service Hours.xlsx"
 
 if not os.path.exists(data_path):
     st.error(f"Could not find `{data_path}`. Make sure it is in the same folder as app.py in your GitHub repo.")
