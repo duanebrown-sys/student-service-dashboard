@@ -15,7 +15,7 @@ st.title("🎓 Student Service Hour Tracker")
 st.write("Enter your name below to see your service hour progress.")
 
 # --- Load Data ---
-data_path = "Service Hours.xlsx")
+data_path = "Service Hours.xlsx"
 
 if not os.path.exists(data_path):
     st.error(f"Could not find the data file at `{data_path}`. Make sure your Excel file is in the `data` folder and named exactly **Service Hours.xlsx**.")
@@ -84,5 +84,6 @@ if search_query:
                 st.info(f"Minimum requirement met! You need **{out_dist} more hours** to earn Distinction.")
             else:
                 st.success("You have earned Distinction! Congratulations! 🎉")
+
 
 
