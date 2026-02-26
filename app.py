@@ -14,25 +14,31 @@ st.title("🎓 Student Service Hour Tracker")
 st.write("Enter your name below to see your service hour progress.")
 
 # --- Load Live Data from Google Sheet ---
-SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSW8n1nHKhUpvA1jcDBswmKuHQ_QkRXrZHq7Enbjb1TtzAifFX_GDQXgy3o45oBzXJhPydfU8NAKopd/pub?gid=1548414781&single=true&output=csv"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSW8n1nHKhUpvA1jcDBswmKuHQ_QkRXrZHq7Enbjb1TtzAifFX_GDQXgy3o45oBzXJhPydfU8NAKopd/pub?output=csv"
 
-@st.cache_data(ttl=300)  # Refresh data every 5 minutes
+@st.cache_data(ttl=300)  # Refresh every 5 minutes
 def load_data():
     df = pd.read_csv(SHEET_URL)
     df.columns = df.columns.str.strip()
 
+    # Google Sheet has duplicate column names so pandas renames them:
+    # Slot 1: Name of student, Number of hours, Description of service
+    # Slot 2: Name of student.1, Number of hours.1, Description of service.1
+    # Slot 3: Name of student.2, Number of hours.2, Description of service.2
+    # Slot 4: Name of student.3, Number of hours.3, Description of service.3
     slots = [
-        ("Name of student",   "Number of hours",   "Select student grade level", "Description of service",   "Date of service"),
-        ("Name of student 2", "Number of hours 2",  "Select student grade level", "Description of service 2", "Date of service"),
-        ("Name of student 3", "Number of hours 3",  "Select student grade level", "Description of service 3", "Date of service"),
-        ("Name of student 4", "Number of hours 4",  "Select student grade level", "Description of service 4", "Date of service"),
+        ("Name of student",    "Number of hours",    "Select student grade level", "Description of service",    "Date of service"),
+        ("Name of student.1",  "Number of hours.1",  "Select student grade level", "Description of service.1",  "Date of service"),
+        ("Name of student.2",  "Number of hours.2",  "Select student grade level", "Description of service.2",  "Date of service"),
+        ("Name of student.3",  "Number of hours.3",  "Select student grade level", "Description of service.3",  "Date of service"),
     ]
 
     records = []
     for name_col, hours_col, grade_col, desc_col, date_col in slots:
-        subset = df[[name_col, hours_col, grade_col, desc_col, date_col]].copy()
-        subset.columns = ["Name", "Hours", "Grade", "Description", "Date"]
-        records.append(subset)
+        if name_col in df.columns:
+            subset = df[[name_col, hours_col, grade_col, desc_col, date_col]].copy()
+            subset.columns = ["Name", "Hours", "Grade", "Description", "Date"]
+            records.append(subset)
 
     combined = pd.concat(records)
     combined = combined.dropna(subset=["Name"])
@@ -51,7 +57,7 @@ def load_data():
 try:
     combined, summary = load_data()
 except Exception as e:
-    st.error(f"Could not load data from Google Sheets. Make sure the sheet is published to the web.\n\n{e}")
+    st.error(f"Could not load data from Google Sheets. Error: {e}")
     st.stop()
 
 # --- Requirements by grade ---
@@ -136,8 +142,6 @@ if search_query:
                 else:
                     for _, entry in student_log.iterrows():
                         date_str = entry["Date"].strftime("%B %d, %Y") if pd.notna(entry["Date"]) else "Date unknown"
-                        hrs  = entry["Hours"]
-                        desc = entry["Description"]
-                        st.markdown(f"**{date_str}** — {hrs:.1f} hrs")
-                        st.write(f"_{desc}_")
+                        st.markdown(f"**{date_str}** — {entry['Hours']:.1f} hrs")
+                        st.write(f"_{entry['Description']}_")
                         st.write("")
