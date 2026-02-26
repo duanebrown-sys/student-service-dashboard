@@ -73,6 +73,7 @@ if search_query:
         for _, row in results.iterrows():
             completed = row["Completed_Hours"]
             grade     = row["Grade"]
+            student_name = row["Name"]
             req_min, req_dist = get_requirements(grade)
 
             hours_needed_min  = max(0, req_min - completed)
@@ -90,7 +91,7 @@ if search_query:
                 status_color = "#e65100"
 
             st.divider()
-            st.markdown(f"<div class='big-name'>{row['Name']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='big-name'>{student_name}</div>", unsafe_allow_html=True)
             st.caption(f"Grade {grade}")
             st.markdown(
                 f"<span style='font-size:1.1rem; font-weight:600; color:{status_color}'>{status_label}</span>",
@@ -123,15 +124,19 @@ if search_query:
                 st.success("You have earned Distinction! Congratulations! 🎉")
 
             # --- Service Log ---
-            student_log = combined[combined["Name"] == row["Name"]].copy()
+            # Match using lowercase to avoid any casing mismatches
+            student_log = combined[combined["Name"].str.lower() == student_name.lower()].copy()
             student_log = student_log.sort_values("Date", ascending=False)
 
             st.write("")
-            with st.expander("📋 View My Service Log"):
-                for _, entry in student_log.iterrows():
-                    date_str = entry["Date"].strftime("%B %d, %Y") if pd.notna(entry["Date"]) else "Date unknown"
-                    hrs = entry["Hours"]
-                    desc = entry["Description"]
-                    st.markdown(f"**{date_str}** — {hrs:.1f} hrs")
-                    st.write(f"_{desc}_")
-                    st.write("")
+            with st.expander(f"📋 View Service Log ({len(student_log)} entries)"):
+                if student_log.empty:
+                    st.write("No entries found.")
+                else:
+                    for _, entry in student_log.iterrows():
+                        date_str = entry["Date"].strftime("%B %d, %Y") if pd.notna(entry["Date"]) else "Date unknown"
+                        hrs  = entry["Hours"]
+                        desc = entry["Description"]
+                        st.markdown(f"**{date_str}** — {hrs:.1f} hrs")
+                        st.write(f"_{desc}_")
+                        st.write("")
