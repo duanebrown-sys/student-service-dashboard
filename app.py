@@ -24,24 +24,26 @@ if not os.path.exists(data_path):
 df = pd.read_excel(data_path)
 df.columns = df.columns.str.strip()
 
-# Combine the 4 student slots into one unified list of (name, hours, grade)
+# Combine the 4 student slots into one unified list
 slots = [
-    ("Name of student",   "Number of hours",   "Select student grade level"),
-    ("Name of student 2", "Number of hours 2",  "Select student grade level"),
-    ("Name of student 3", "Number of hours 3",  "Select student grade level"),
-    ("Name of student 4", "Number of hours 4",  "Select student grade level"),
+    ("Name of student",   "Number of hours",   "Select student grade level", "Description of service",   "Date of service"),
+    ("Name of student 2", "Number of hours 2",  "Select student grade level", "Description of service 2", "Date of service"),
+    ("Name of student 3", "Number of hours 3",  "Select student grade level", "Description of service 3", "Date of service"),
+    ("Name of student 4", "Number of hours 4",  "Select student grade level", "Description of service 4", "Date of service"),
 ]
 
 records = []
-for name_col, hours_col, grade_col in slots:
-    subset = df[[name_col, hours_col, grade_col]].copy()
-    subset.columns = ["Name", "Hours", "Grade"]
+for name_col, hours_col, grade_col, desc_col, date_col in slots:
+    subset = df[[name_col, hours_col, grade_col, desc_col, date_col]].copy()
+    subset.columns = ["Name", "Hours", "Grade", "Description", "Date"]
     records.append(subset)
 
 combined = pd.concat(records)
 combined = combined.dropna(subset=["Name"])
-combined["Hours"] = pd.to_numeric(combined["Hours"], errors="coerce").fillna(0)
-combined["Name"]  = combined["Name"].str.strip().str.title()
+combined["Hours"]       = pd.to_numeric(combined["Hours"], errors="coerce").fillna(0)
+combined["Name"]        = combined["Name"].str.strip().str.title()
+combined["Description"] = combined["Description"].fillna("No description provided")
+combined["Date"]        = pd.to_datetime(combined["Date"], errors="coerce")
 
 # Summarize by student
 summary = combined.groupby("Name").agg(
@@ -51,13 +53,13 @@ summary = combined.groupby("Name").agg(
 
 # Requirements by grade
 def get_requirements(grade):
-    grade = str(grade).strip().lower().replace("th", "").replace("st", "").replace("nd", "").replace("rd", "")
+    grade = str(grade).strip().lower().replace("th","").replace("st","").replace("nd","").replace("rd","")
     if grade in ["9", "10"]:
         return 50, 100
     elif grade in ["11", "12"]:
         return 100, 150
     else:
-        return 50, 100  # default fallback
+        return 50, 100
 
 # --- Search ---
 search_query = st.text_input("🔍 Search by Name", placeholder="Start typing your name...")
@@ -104,12 +106,10 @@ if search_query:
 
             st.write("")
 
-            # Progress toward minimum
             pct_min = min(completed / req_min, 1.0) if req_min > 0 else 1.0
             st.write(f"**Progress toward Minimum** ({int(pct_min * 100)}%)")
             st.progress(pct_min)
 
-            # Progress toward distinction
             pct_dist = min(completed / req_dist, 1.0) if req_dist > 0 else 1.0
             st.write(f"**Progress toward Distinction** ({int(pct_dist * 100)}%)")
             st.progress(pct_dist)
@@ -121,3 +121,17 @@ if search_query:
                 st.info(f"Minimum met! You need **{hours_needed_dist:.1f} more hours** to earn Distinction.")
             else:
                 st.success("You have earned Distinction! Congratulations! 🎉")
+
+            # --- Service Log ---
+            student_log = combined[combined["Name"] == row["Name"]].copy()
+            student_log = student_log.sort_values("Date", ascending=False)
+
+            st.write("")
+            with st.expander("📋 View My Service Log"):
+                for _, entry in student_log.iterrows():
+                    date_str = entry["Date"].strftime("%B %d, %Y") if pd.notna(entry["Date"]) else "Date unknown"
+                    hrs = entry["Hours"]
+                    desc = entry["Description"]
+                    st.markdown(f"**{date_str}** — {hrs:.1f} hrs")
+                    st.write(f"_{desc}_")
+                    st.write("")
