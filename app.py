@@ -15,7 +15,7 @@ st.title("🎓 Student Service Hour Tracker")
 st.write("Enter your name below to see your service hour progress.")
 
 # --- Load Data ---
-data_path = os.path.join("data", "Service Hours.xlsx")
+data_path = os.path.join("data", "Service_Hours_Dashboard.xlsx")
 
 if not os.path.exists(data_path):
     st.error(f"Could not find the data file at `{data_path}`. Make sure your Excel file is in the `data` folder and named exactly **Service Hours.xlsx**.")
