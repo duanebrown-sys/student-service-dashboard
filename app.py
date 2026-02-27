@@ -7,6 +7,9 @@ st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
     .big-name { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .gold   { color: #FFD700; font-size: 1.3rem; }
+    .silver { color: #C0C0C0; font-size: 1.3rem; }
+    .bronze { color: #CD7F32; font-size: 1.3rem; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -16,21 +19,16 @@ st.write("Enter your name below to see your service hour progress.")
 # --- Load Live Data from Google Sheet ---
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSW8n1nHKhUpvA1jcDBswmKuHQ_QkRXrZHq7Enbjb1TtzAifFX_GDQXgy3o45oBzXJhPydfU8NAKopd/pub?output=csv"
 
-@st.cache_data(ttl=300)  # Refresh every 5 minutes
+@st.cache_data(ttl=300)
 def load_data():
     df = pd.read_csv(SHEET_URL)
     df.columns = df.columns.str.strip()
 
-    # Google Sheet has duplicate column names so pandas renames them:
-    # Slot 1: Name of student, Number of hours, Description of service
-    # Slot 2: Name of student.1, Number of hours.1, Description of service.1
-    # Slot 3: Name of student.2, Number of hours.2, Description of service.2
-    # Slot 4: Name of student.3, Number of hours.3, Description of service.3
     slots = [
-        ("Name of student",    "Number of hours",    "Select student grade level", "Description of service",    "Date of service"),
-        ("Name of student.1",  "Number of hours.1",  "Select student grade level", "Description of service.1",  "Date of service"),
-        ("Name of student.2",  "Number of hours.2",  "Select student grade level", "Description of service.2",  "Date of service"),
-        ("Name of student.3",  "Number of hours.3",  "Select student grade level", "Description of service.3",  "Date of service"),
+        ("Name of student",   "Number of hours",   "Select student grade level", "Description of service",   "Date of service"),
+        ("Name of student.1", "Number of hours.1", "Select student grade level", "Description of service.1", "Date of service"),
+        ("Name of student.2", "Number of hours.2", "Select student grade level", "Description of service.2", "Date of service"),
+        ("Name of student.3", "Number of hours.3", "Select student grade level", "Description of service.3", "Date of service"),
     ]
 
     records = []
@@ -70,8 +68,35 @@ def get_requirements(grade):
     else:
         return 50, 100
 
+# --- Leaderboard ---
+st.subheader("🏆 Leaderboard — Top 5 Closest to Completion")
+
+leaderboard = summary.copy()
+leaderboard[["req_min", "req_dist"]] = leaderboard["Grade"].apply(
+    lambda g: pd.Series(get_requirements(g))
+)
+leaderboard["pct_min"] = (leaderboard["Completed_Hours"] / leaderboard["req_min"] * 100).clip(upper=100)
+leaderboard["hours_remaining"] = (leaderboard["req_min"] - leaderboard["Completed_Hours"]).clip(lower=0)
+
+# Only show students not yet at minimum, sorted by closest to finish
+not_done = leaderboard[leaderboard["hours_remaining"] > 0].sort_values("hours_remaining").head(5)
+
+medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
+
+for i, (_, row) in enumerate(not_done.iterrows()):
+    col1, col2 = st.columns([3, 2])
+    with col1:
+        st.markdown(f"{medals[i]} **{row['Name']}** — Grade {row['Grade']}")
+        st.progress(row["pct_min"] / 100)
+    with col2:
+        st.metric("Hours Completed", f"{row['Completed_Hours']:.1f} hrs")
+        st.caption(f"⏳ {row['hours_remaining']:.1f} hrs to go")
+
+st.divider()
+
 # --- Search ---
-search_query = st.text_input("🔍 Search by Name", placeholder="Start typing your name...")
+st.subheader("🔍 Check Your Progress")
+search_query = st.text_input("Search by Name", placeholder="Start typing your name...")
 
 if search_query:
     results = summary[summary["Name"].str.contains(search_query, case=False, na=False)]
