@@ -7,16 +7,12 @@ st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
     .big-name { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; }
-    .gold   { color: #FFD700; font-size: 1.3rem; }
-    .silver { color: #C0C0C0; font-size: 1.3rem; }
-    .bronze { color: #CD7F32; font-size: 1.3rem; }
     </style>
 """, unsafe_allow_html=True)
 
 st.title("🎓 Student Service Hour Tracker")
 st.write("Enter your name below to see your service hour progress.")
 
-# --- Load Live Data from Google Sheet ---
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSW8n1nHKhUpvA1jcDBswmKuHQ_QkRXrZHq7Enbjb1TtzAifFX_GDQXgy3o45oBzXJhPydfU8NAKopd/pub?output=csv"
 
 @st.cache_data(ttl=300)
@@ -58,12 +54,11 @@ except Exception as e:
     st.error(f"Could not load data from Google Sheets. Error: {e}")
     st.stop()
 
-# --- Requirements by grade ---
 def get_requirements(grade):
-    grade = str(grade).strip().lower().replace("th","").replace("st","").replace("nd","").replace("rd","")
-    if grade in ["9", "10"]:
+    g = str(grade).strip().lower().replace("th","").replace("st","").replace("nd","").replace("rd","")
+    if g in ["9", "10"]:
         return 50, 100
-    elif grade in ["11", "12"]:
+    elif g in ["11", "12"]:
         return 100, 150
     else:
         return 50, 100
@@ -71,26 +66,28 @@ def get_requirements(grade):
 # --- Leaderboard ---
 st.subheader("🏆 Leaderboard — Top 5 Closest to Completion")
 
-leaderboard = summary.copy()
-leaderboard[["req_min", "req_dist"]] = leaderboard["Grade"].apply(
-    lambda g: pd.Series(get_requirements(g))
-)
-leaderboard["pct_min"] = (leaderboard["Completed_Hours"] / leaderboard["req_min"] * 100).clip(upper=100)
-leaderboard["hours_remaining"] = (leaderboard["req_min"] - leaderboard["Completed_Hours"]).clip(lower=0)
+try:
+    lb = summary.copy()
+    lb["req_min"]          = lb["Grade"].apply(lambda g: get_requirements(g)[0])
+    lb["pct_min"]          = (lb["Completed_Hours"] / lb["req_min"] * 100).clip(upper=100)
+    lb["hours_remaining"]  = (lb["req_min"] - lb["Completed_Hours"]).clip(lower=0)
 
-# Only show students not yet at minimum, sorted by closest to finish
-not_done = leaderboard[leaderboard["hours_remaining"] > 0].sort_values("hours_remaining").head(5)
+    not_done = lb[lb["hours_remaining"] > 0].sort_values("hours_remaining").head(5)
+    medals   = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
 
-medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
-
-for i, (_, row) in enumerate(not_done.iterrows()):
-    col1, col2 = st.columns([3, 2])
-    with col1:
-        st.markdown(f"{medals[i]} **{row['Name']}** — Grade {row['Grade']}")
-        st.progress(row["pct_min"] / 100)
-    with col2:
-        st.metric("Hours Completed", f"{row['Completed_Hours']:.1f} hrs")
-        st.caption(f"⏳ {row['hours_remaining']:.1f} hrs to go")
+    if not_done.empty:
+        st.success("All students have met their minimum requirement! 🎉")
+    else:
+        for i, (_, row) in enumerate(not_done.iterrows()):
+            col1, col2 = st.columns([3, 2])
+            with col1:
+                st.markdown(f"{medals[i]} **{row['Name']}** — Grade {row['Grade']}")
+                st.progress(float(row["pct_min"]) / 100)
+            with col2:
+                st.metric("Hours Completed", f"{row['Completed_Hours']:.1f} hrs")
+                st.caption(f"⏳ {row['hours_remaining']:.1f} hrs to go")
+except Exception as e:
+    st.warning(f"Leaderboard could not load: {e}")
 
 st.divider()
 
@@ -156,7 +153,6 @@ if search_query:
             else:
                 st.success("You have earned Distinction! Congratulations! 🎉")
 
-            # --- Service Log ---
             student_log = combined[combined["Name"].str.lower() == student_name.lower()].copy()
             student_log = student_log.sort_values("Date", ascending=False)
 
